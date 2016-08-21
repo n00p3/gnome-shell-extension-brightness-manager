@@ -1,17 +1,20 @@
 const Lang = imports.lang;
 const Gio = imports.gi.Gio;
+const GLib = imports.gi.GLib;
 const St = imports.gi.St;
 const Main = imports.ui.main;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Slider = imports.ui.slider;
+const Util = imports.misc.util;
+const MessageTray = imports.ui.messageTray;
 
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 const Convenience = Me.imports.convenience;
 const Gettext = imports.gettext.domain('text-scaler');
 const _ = Gettext.gettext;
 
-const DEFAULT_VALUE = 1;
+const DEFAULT_VALUE = 75;
 const MIN_VALUE = 0;
 const MAX_VALUE = 100;
 
@@ -79,7 +82,8 @@ const TextScalerButton = new Lang.Class({
 
         this._slider = new Slider.Slider(this._sliderValue);
         this._slider.connect('value-changed', Lang.bind(this, this._onSliderValueChanged));
-        this._slider.connect('drag-begin', Lang.bind(this, this._onSliderDragBegan));
+        // this._slider.connect('drag-begin', Lang.bind(this,
+		// this._onSliderDragBegan));
         this._slider.connect('drag-end', Lang.bind(this, this._onSliderDragEnded));
         this._slider.actor.x_expand = true;
         this._menuItem.actor.add_actor(this._slider.actor);
@@ -122,8 +126,8 @@ const TextScalerButton = new Lang.Class({
         // around to avoid the unpredictable (and very confusing) behaviour
         // that would happen due to the mouse pointer being on a different
         // area of the screen right after updating the scaling factor.
-        if (!this._sliderIsDragging)
-            this._updateValue(_sliderValueToTextScaling(this._sliderValue));
+        // if (!this._sliderIsDragging)
+          // this._updateValue(_sliderValueToTextScaling(this._sliderValue));
     },
 
     _onSliderDragBegan: function(slider) {
@@ -133,10 +137,51 @@ const TextScalerButton = new Lang.Class({
     _onSliderDragEnded: function(slider) {
         // We don't update the scaling factor on 'value-changed'
         // when explicitly dragging, so we need to do it here too.
-        this._updateValue(_sliderValueToTextScaling(this._sliderValue));
-        this._sliderIsDragging = false;
-    },
-
+        // this._updateValue(_sliderValueToTextScaling(this._sliderValue));
+        // this._sliderIsDragging = false;
+    	
+    	
+    	// sudo ddccontrol dev:/dev/i2c-0 -r 0x10 -w 100
+    	// echo r | sudo -S ddccontrol dev:/dev/i2c-0 -r 0x10 -w 100
+    	// Util.spawn(['xrandr', '--output', output, '--scale', scale + "x" +
+		// scale])
+    	// xrandr --output VGA-1 --brightness 1
+    	// let output = 'VGA-1';
+    	// Util.spawn(['xrandr', '--output', output, '--brightness', '0.2'])
+    	
+    	let device = 'dev:/dev/i2c-0';
+    	let brightnessValue = '50';
+    	
+    	notify('excecuting', 'blash');
+    	Util.spawn(['sudo','ddccontrol',device,'-r','0x10','-w',brightnessValue]);
+    	
+    	notify('result',this._doCommand('sudo ddccontrol -p | grep -i device:'));
+/*
+ * You can do this by editing your sudoer file.
+ * 
+ * Open a terminal (ctrl+alt+T)
+ * 
+ * enter the following command
+ * 
+ * sudo visudo
+ * 
+ * Once the file opens enter the following command
+ * 
+ * username ALL=(ALL) NOPASSWD: /usr/bin/ddccontrol
+ * 
+ * Replace username with the your own username
+ * 
+ * You can find the path to the command by running "which command"
+ * 
+ */
+ 
+    	
+   },
+    
+   _doCommand: function(command) {
+	   let output = GLib.spawn_sync(null,['bash', '-c', command],null,GLib.SpawnFlags.SEARCH_PATH,null);
+	   return output[0] ? output[1].toString() : "script error";
+   },
     _onResetValueActivate: function(menuItem, event) {
         this._updateValue(DEFAULT_VALUE);
     },
@@ -201,4 +246,34 @@ function enable() {
 
 function disable() {
     _button.destroy();
+}
+
+const ExtensionNotificationSource = new Lang.Class({
+    Name: 'ExtensionNotificationSource',
+    Extends: MessageTray.Source,
+
+    _init: function() {
+
+        this.parent(_("Extension"), 'dialog-warning-symbolic');
+    },
+
+    open: function() {
+        this.destroy();
+    }
+});
+
+function notifyError(msg, details) {
+    log('error: ' + msg + ': ' + details);
+    notify(msg, details);
+}
+
+function notify(msg, details) {
+    let source = new ExtensionNotificationSource();
+    Main.messageTray.add(source);
+    let notification = new MessageTray.Notification(source, msg, details);
+    if (source.setTransient === undefined)
+        notification.setTransient(true);
+    else
+        source.setTransient(true);
+    source.notify(notification);
 }
