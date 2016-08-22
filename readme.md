@@ -1,4 +1,4 @@
-To this extension works you need first at all install ddccontrol by running 
+For this extension to work it is needed first of all install ddccontrol by running 
 	sudo apt-get install ddccontrol
 
 Later you have to allow ddccontrol to run as sudo. You can do this by editing your sudoer file as follows:
