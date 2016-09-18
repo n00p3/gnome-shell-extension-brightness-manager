@@ -3,6 +3,7 @@ const Gio = imports.gi.Gio;
 const GLib = imports.gi.GLib;
 const St = imports.gi.St;
 const Main = imports.ui.main;
+const Mainloop = imports.mainloop;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Slider = imports.ui.slider;
@@ -17,6 +18,7 @@ const MIN_VALUE = 0;
 const MAX_VALUE = 100;
 const NUM_DECIMALS = 0;
 const TEXT_SCALING_FACTOR_KEY = 'text-scaling-factor';
+const TIME_OUT = 600;
 
 
 let brightnessManager = null;
@@ -34,16 +36,16 @@ function disable() {
     brightnessManager.destroy();
 }
 
-function normalizeValue(value) {
+function normalizeNumber(value) {
     return Math.max(MIN_VALUE, Math.min(value, MAX_VALUE));
 }
 
-function textScalingToSliderValue(textScaling) {
-    return (textScaling - MIN_VALUE) / (MAX_VALUE - MIN_VALUE);
+function descaleNumber(value) {
+    return ((value - MIN_VALUE) / (MAX_VALUE - MIN_VALUE));
 }
 
-function sliderValueToTextScaling(sliderValue) {
-    return sliderValue * (MAX_VALUE - MIN_VALUE) + MIN_VALUE;
+function scaleNumber(value) {
+    return (value * (MAX_VALUE - MIN_VALUE) + MIN_VALUE).toFixed(0);
 }
 
 function isDefaultFloatValue(value) {
@@ -55,6 +57,7 @@ const BrightnessManager = new Lang.Class({
     Extends: PanelMenu.Button,
     _init: function () {
         this.sliderIsDragging = false;
+        this.timeoutId = 0;
 
         this.devices = this.queryDevices();
         this.parent(0.0, "Brightness Manager");
@@ -62,9 +65,7 @@ const BrightnessManager = new Lang.Class({
 
         this.settings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
         this.settings.connect('changed::text-scaling-factor', Lang.bind(this, this.onSettingsChanged));
-
         this.currentValue = this.settings.get_double(TEXT_SCALING_FACTOR_KEY);
-        this.sliderValue = textScalingToSliderValue(this.currentValue);
 
         this.hbox = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this.hbox.add_child(new St.Icon({
@@ -80,15 +81,14 @@ const BrightnessManager = new Lang.Class({
         this.menuItem.actor.connect('key-press-event', Lang.bind(this, this.onMenuItemKeyPressed));
         this._menu.addMenuItem(this.menuItem);
 
-        this.inputText = new St.Entry({style_class: 'input-text'});
-        this.inputText.clutter_text.connect('activate', Lang.bind(this, this.onEntryActivated));
-        this.inputText.clutter_text.connect('key-focus-out', Lang.bind(this, this.onEntryKeyFocusOut));
-        this.menuItem.actor.add_child(this.inputText);
+        this.textEntry = new St.Entry({style_class: 'input-text'});
+        this.updateTextEntry(DEFAULT_VALUE);
+        this.textEntry.clutter_text.connect('activate', Lang.bind(this, this.onEntryActivated));
+        this.textEntry.clutter_text.connect('key-focus-out', Lang.bind(this, this.onEntryKeyFocusOut));
+        this.menuItem.actor.add_child(this.textEntry);
 
-        this.slider = new Slider.Slider(this.sliderValue);
+        this.slider = new Slider.Slider(descaleNumber(DEFAULT_VALUE));
         this.slider.connect('value-changed', Lang.bind(this, this.onSliderValueChanged));
-        this.slider.connect('drag-begin', Lang.bind(this, this.onSliderDragBegan));
-        this.slider.connect('drag-end', Lang.bind(this, this.onSliderDragEnded));
         this.slider.actor.x_expand = true;
         this.menuItem.actor.add_actor(this.slider.actor);
 
@@ -99,8 +99,6 @@ const BrightnessManager = new Lang.Class({
         this.resetValueItem = new PopupMenu.PopupMenuItem(_("Reset to default value"));
         this.resetValueItem.connect('activate', Lang.bind(this, this.onResetValueActivate));
         this._menu.addMenuItem(this.resetValueItem);
-
-        this.updateUI();
     },
 
     onSettingsChanged: function (settings, key) {
@@ -119,19 +117,52 @@ const BrightnessManager = new Lang.Class({
         this.updateValueFromTextEntry(entry);
     },
 
+    updateValueFromTextEntry: function (entry) {
+        let currentText = entry.get_text();
+        let value = parseInt(currentText);
+
+        if (isFinite(currentText) && !isNaN(currentText) && !isNaN(value)) {
+            value = normalizeNumber(value);
+            this.updateBrightnessValue(value.toString());
+            this.updateSlider(descaleNumber(value));
+            this.updateTextEntry(value);
+        }
+    },
+
     onSliderValueChanged: function (slider, value) {
-        this.sliderValue = value;
-        this.updateTextEntry(sliderValueToTextScaling(value));
+        let scaled = scaleNumber(value);
+        this.updateBrightnessValue(scaled);
+        this.updateTextEntry(scaled);
     },
 
-    onSliderDragBegan: function (slider) {
-        this.sliderIsDragging = true;
+    onResetValueActivate: function (menuItem, event) {
+        this.updateBrightnessValue(DEFAULT_VALUE.toString());
+        this.updateSlider(descaleNumber(DEFAULT_VALUE));
+        this.updateTextEntry(DEFAULT_VALUE);
     },
 
-    onSliderDragEnded: function (slider) {
-        let value = sliderValueToTextScaling(slider._getCurrentValue()).toFixed(0);
-        this.sliderIsDragging = false;
-        this.updateBrightnessValue(value);
+
+    updateBrightnessValue: function (value) {
+        this.currentValue = value;
+
+        if (this.timeoutId == 0) {
+            this.timeoutId = Mainloop.timeout_add(TIME_OUT, Lang.bind(this, this.onTimeout));
+        }
+    },
+
+    onTimeout: function () {
+        this.timeoutId = 0;
+        this.setBrightnessToAllLCD(this.currentValue);
+        Mainloop.source_remove(this.timeoutId);
+    },
+
+
+    updateTextEntry: function (value) {
+        this.textEntry.set_text(value.toString());
+    },
+
+    updateSlider: function (value) {
+        this.slider.setValue(value);
     },
 
     setBrightnessToAllLCD: function (value) {
@@ -157,49 +188,6 @@ const BrightnessManager = new Lang.Class({
     executeCommand: function (command) {
         let output = GLib.spawn_sync(null, ['bash', '-c', command], null, GLib.SpawnFlags.SEARCH_PATH, null);
         return output[0] ? output[1].toString() : "script error";
-    },
-
-    onResetValueActivate: function (menuItem, event) {
-        this.updateBrightnessValue(DEFAULT_VALUE);
-    },
-
-    updateValueFromTextEntry: function (entry) {
-        let currentText = entry.get_text();
-        let value = parseFloat(currentText);
-
-        if (isFinite(currentText) && !isNaN(currentText) && !isNaN(value)) {
-            this.updateBrightnessValue(value);
-        }
-
-        this.updateUI();
-    },
-
-    updateBrightnessValue: function (value) {
-        if (this.currentValue != value && !this.sliderIsDragging) {
-            this.currentValue = normalizeValue(value);
-            this.updateUI();
-            notifyError("dfsdfds","");
-        }
-    },
-
-    updateUI: function () {
-        this.updateTextEntry();
-        this.updateSlider();
-        this.updateResetValueItem();
-    },
-
-    updateTextEntry: function (value=null) {
-        let valueToDisplay = (value != null) ? value : this.currentValue;
-
-        this.inputText.set_text(valueToDisplay.toFixed(NUM_DECIMALS));
-    },
-
-    updateSlider: function () {
-        this.slider.setValue(textScalingToSliderValue(this.currentValue));
-    },
-
-    updateResetValueItem: function () {
-        this.resetValueItem.setSensitive(!isDefaultFloatValue(this.currentValue));
     }
 });
 
