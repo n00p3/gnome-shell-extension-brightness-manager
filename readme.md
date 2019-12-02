@@ -1,4 +1,6 @@
-For this extension to work it is needed first of all install ddccontrol by running 
+![image](img.png)
+
+For this extension to work it is needed first of all install ddcutil by running 
 	sudo apt-get install ddcutil
 
 Later you have to allow ddcutil to run as sudo. You can do this by editing your sudoer file as follows:
