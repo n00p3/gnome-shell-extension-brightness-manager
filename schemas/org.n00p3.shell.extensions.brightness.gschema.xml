@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.n00p3.brigthness_control_ddcutil" path="/org/gnome/shell/extensions/n00p3/brightness/">
+    <!-- The key type "a{sb}" describes a dictionary of string-boolean pairs -->
+    <!-- See also: https://developer.gnome.org/glib/stable/gvariant-format-strings.html -->
+    <key name="brightness" type="i">
+      <default>50</default>
+    </key>
+  </schema>
+</schemalist>
