@@ -1,7 +1,7 @@
 {
 	"description": "Brightness manager to external displays like LCDs",
-	"name": "Brightness Manager",
-	"original-authors": "Victor Rodriguez",
+	"name": "Brightness Manager (ddcutil)",
+	"original-authors": "Victor Rodriguez & n00p3",
 	"shell-version": 
 	[
 		"3.4",
@@ -15,7 +15,7 @@
 		"3.20"
 	],
 
-	"url": "https://github.com/vrodmz/gnome-shell-extension-brightness-manager",
-	"uuid": "brightness-manager@vrodmz.co",
+	"url": "https://github.com/n00p3/gnome-shell-extension-brightness-manager",
+	"uuid": "Brightness_Control_ddcutil_no.name.dev.0@gmail.com",
 	"version": 1
 }
