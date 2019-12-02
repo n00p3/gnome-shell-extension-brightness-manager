@@ -13,13 +13,27 @@ const Me = imports.misc.extensionUtils.getCurrentExtension();
 const Convenience = Me.imports.convenience;
 const Gettext = imports.gettext.domain('text-scaler');
 const _ = Gettext.gettext;
-const DEFAULT_VALUE = 75;
 const MIN_VALUE = 0;
 const MAX_VALUE = 100;
 const NUM_DECIMALS = 0;
 const TEXT_SCALING_FACTOR_KEY = 'text-scaling-factor';
 const TIME_OUT = 600;
 
+
+//      this.localSettings = new Gio.Settings({schema_id: 'settings'});
+//	this.localSettings.set_int('brightness', 123);
+// Get the GSchema source so we can lookup our settings
+let gschema = Gio.SettingsSchemaSource.new_from_directory(
+    Me.dir.get_child('schemas').get_path(),
+    Gio.SettingsSchemaSource.get_default(),
+    false
+);
+
+localSettings = new Gio.Settings({
+    settings_schema: gschema.lookup('org.n00p3.brigthness_control_ddcutil', true)
+});
+
+const DEFAULT_VALUE = localSettings.get_value('brightness').deep_unpack();
 
 let brightnessManager = null;
 
@@ -66,11 +80,11 @@ const BrightnessManager = new Lang.Class({
         this.settings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
         this.settings.connect('changed::text-scaling-factor', Lang.bind(this, this.onSettingsChanged));
         this.currentValue = this.settings.get_double(TEXT_SCALING_FACTOR_KEY);
-
+        // this.currentValue = localSettings.get_value('brightness').deep_unpack();
         this.hbox = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this.hbox.add_child(new St.Icon({
             style_class: 'system-status-icon',
-            icon_name: 'preferences-desktop-multimedia'
+            icon_name: 'display-brightness-symbolic'
         }));
         this.actor.add_child(this.hbox);
 
@@ -96,9 +110,6 @@ const BrightnessManager = new Lang.Class({
         this.separatorItem = new PopupMenu.PopupSeparatorMenuItem();
         this._menu.addMenuItem(this.separatorItem);
 
-        this.resetValueItem = new PopupMenu.PopupMenuItem(_("Reset to default value"));
-        this.resetValueItem.connect('activate', Lang.bind(this, this.onResetValueActivate));
-        this._menu.addMenuItem(this.resetValueItem);
     },
 
     onSettingsChanged: function (settings, key) {
@@ -166,6 +177,7 @@ const BrightnessManager = new Lang.Class({
     },
 
     setBrightnessToAllLCD: function (value) {
+        localSettings.set_int('brightness', value)
         for (var i = 0; i < this.devices.length; i++) {
             this.setLCDBrightness(i, value);
         }
@@ -173,7 +185,7 @@ const BrightnessManager = new Lang.Class({
 
     setLCDBrightness: function (deviceIndex, value) {
         var device = this.devices[deviceIndex];
-        Util.spawn(['sudo', 'ddccontrol', device, '-r', '0x10', '-w', value]);
+        Util.spawn(['sudo', 'ddcutil', 'setvcp', '10', value]);
     },
 
     queryDevices: function () {
