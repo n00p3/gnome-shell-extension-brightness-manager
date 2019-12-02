@@ -20,9 +20,6 @@ const TEXT_SCALING_FACTOR_KEY = 'text-scaling-factor';
 const TIME_OUT = 600;
 
 
-//      this.localSettings = new Gio.Settings({schema_id: 'settings'});
-//	this.localSettings.set_int('brightness', 123);
-// Get the GSchema source so we can lookup our settings
 let gschema = Gio.SettingsSchemaSource.new_from_directory(
     Me.dir.get_child('schemas').get_path(),
     Gio.SettingsSchemaSource.get_default(),
@@ -80,12 +77,12 @@ const BrightnessManager = new Lang.Class({
         this.settings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
         this.settings.connect('changed::text-scaling-factor', Lang.bind(this, this.onSettingsChanged));
         this.currentValue = this.settings.get_double(TEXT_SCALING_FACTOR_KEY);
-        // this.currentValue = localSettings.get_value('brightness').deep_unpack();
         this.hbox = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this.hbox.add_child(new St.Icon({
             style_class: 'system-status-icon',
             icon_name: 'display-brightness-symbolic'
         }));
+        this.hbox.add(PopupMenu.arrowIcon(St.Side.BOTTOM));
         this.actor.add_child(this.hbox);
 
         this._menu = new PopupMenu.PopupMenu(this.actor, 0.0, St.Side.BOTTOM);
